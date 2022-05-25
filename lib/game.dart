@@ -1,12 +1,14 @@
+import 'dart:html';
 import 'dart:math';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'line.dart';
-import 'line_divider.dart';
 import 'note.dart';
-import 'song_creator.dart';
+
+const notesNumber = 10000;
 
 class GamePage extends StatefulWidget {
   @override
@@ -15,8 +17,9 @@ class GamePage extends StatefulWidget {
 
 class _GamePageState extends State<GamePage>
     with SingleTickerProviderStateMixin {
-  AudioPlayer player = AudioPlayer(mode: PlayerMode.LOW_LATENCY);
-  List<Note> notes = initNotes();
+  final AudioCache _audioCache = AudioCache();
+  late List<Note> notes;
+
   late AnimationController animationController;
   int currentNoteIndex = 0;
   int points = 0;
@@ -26,8 +29,10 @@ class _GamePageState extends State<GamePage>
   @override
   void initState() {
     super.initState();
-    animationController =
-        AnimationController(vsync: this, duration: Duration(milliseconds: 450));
+    // _setAssets();
+    notes = _createSong();
+    animationController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 450));
     animationController.addStatusListener((status) {
       if (status == AnimationStatus.completed && isPlaying) {
         if (notes[currentNoteIndex].state != NoteState.pressed) {
@@ -36,10 +41,14 @@ class _GamePageState extends State<GamePage>
             isPlaying = false;
             notes[currentNoteIndex].state = NoteState.missed;
           });
-          animationController.reverse().then((_) => _showFinishDialog());
+          animationController.reverse().then((_) {
+            _saveScore();
+            _showEndScreen();
+          });
         } else if (currentNoteIndex == notes.length - 5) {
           //song finished
-          _showFinishDialog();
+          _saveScore();
+          _showEndScreen();
         } else {
           setState(() => ++currentNoteIndex);
           animationController.forward(from: 0);
@@ -67,15 +76,27 @@ class _GamePageState extends State<GamePage>
           Row(
             children: <Widget>[
               _drawLine(0),
-              LineDivider(),
+              Container(height: double.infinity, width: 1, color: Colors.white),
               _drawLine(1),
-              LineDivider(),
+              Container(height: double.infinity, width: 1, color: Colors.white),
               _drawLine(2),
-              LineDivider(),
+              Container(height: double.infinity, width: 1, color: Colors.white),
               _drawLine(3),
             ],
           ),
-          _drawPoints(),
+          Align(
+            alignment: Alignment.topCenter,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 32.0),
+              child: Text(
+                "$points",
+                style: const TextStyle(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 60),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -85,19 +106,54 @@ class _GamePageState extends State<GamePage>
     setState(() {
       hasStarted = false;
       isPlaying = true;
-      notes = initNotes();
+      notes = _createSong();
       points = 0;
       currentNoteIndex = 0;
     });
     animationController.reset();
   }
 
-  void _showFinishDialog() {
+  void _saveScore() {
+    var message;
+    if (window.localStorage.containsKey('scores')) {
+      message = window.localStorage['scores'];
+      message += points.toString();
+      var scoresString = message.split(",");
+      var scores = [];
+      for (var i in scoresString) {
+        scores.add(int.parse(i));
+      }
+      scores.sort((b, a) => a.compareTo(b));
+      var firstTen = scores.take(10);
+      var leaderboard = '';
+      for (var i in firstTen) {
+        leaderboard += i.toString() + ',';
+      }
+      window.localStorage['scores'] = leaderboard;
+    } else {
+      window.localStorage['scores'] = points.toString() + ',';
+    }
+  }
+
+  _createSong() {
+    List<Note> notes = [];
+    var random = Random();
+    for (var i = 0; i < notesNumber; i++) {
+      notes.add(Note(i, random.nextInt(4)));
+    }
+    notes.add(Note(notesNumber, -1));
+    notes.add(Note(notesNumber + 1, -1));
+    notes.add(Note(notesNumber + 2, -1));
+    notes.add(Note(notesNumber + 3, -1));
+    return notes;
+  }
+
+  void _showEndScreen() {
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text("Score: $points"),
+          title: Text("Score: " + points.toString()),
           actions: <Widget>[
             Column(children: [
               TextButton(
@@ -113,6 +169,12 @@ class _GamePageState extends State<GamePage>
                 },
                 child: const Text("Main menu"),
               ),
+              TextButton(
+                onPressed: () {
+                  _share();
+                },
+                child: const Text("Share on Facebook"),
+              ),
             ])
           ],
         );
@@ -120,19 +182,18 @@ class _GamePageState extends State<GamePage>
     ).then((_) => _restart());
   }
 
-  void _onTap(Note note) {
+  void _tilePressed(Note note) {
     animationController.duration =
         Duration(milliseconds: max(150, 450 - currentNoteIndex));
-    bool areAllPreviousTapped = notes
+    bool allPressed = notes
         .sublist(0, note.orderNumber)
         .every((n) => n.state == NoteState.pressed);
-    print(areAllPreviousTapped);
-    if (areAllPreviousTapped) {
+    if (allPressed) {
       if (!hasStarted) {
         setState(() => hasStarted = true);
         animationController.forward();
       }
-      _playNote(note);
+      _playSound(note);
       setState(() {
         note.state = NoteState.pressed;
         ++points;
@@ -145,39 +206,38 @@ class _GamePageState extends State<GamePage>
       child: Line(
         lineNumber: lineNumber,
         currentNotes: notes.sublist(currentNoteIndex, currentNoteIndex + 5),
-        onTileTap: _onTap,
+        onTileTap: _tilePressed,
         animation: animationController,
       ),
     );
   }
 
-  _drawPoints() {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Padding(
-        padding: const EdgeInsets.only(top: 32.0),
-        child: Text(
-          "$points",
-          style: TextStyle(
-              color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 60),
-        ),
-      ),
-    );
+  _share() async {
+    var message =
+        "Come play with me. I got a score of " + points.toString() + " points";
+    var appUrl =
+        'https://lh3.googleusercontent.com/3NO2xuo4f4diYXyUvj8l2OGtzGgYiYvyCED42lnydqzU3Ni-X6NUasvDgxqKmjySK08=h900';
+    var shareUrl = 'https://www.facebook.com/sharer/sharer.php?u=' +
+        appUrl +
+        '&quote=' +
+        message;
+    await launchUrl(Uri.parse(shareUrl));
   }
 
-  _playNote(Note note) {
+  _playSound(Note note) {
     switch (note.line) {
       case 0:
-        player.play('assets/note1.wav', isLocal: true);
+        // Source source=Source()
+        _audioCache.play('note1.mp3');
         return;
       case 1:
-        player.play('assets/note2.wav', isLocal: true);
+        _audioCache.play('note2.mp3');
         return;
       case 2:
-        player.play('assets/note3.wav', isLocal: true);
+        _audioCache.play('note3.mp3');
         return;
       case 3:
-        player.play('assets/note4.wav', isLocal: true);
+        _audioCache.play('note4.mp3');
         return;
     }
   }
