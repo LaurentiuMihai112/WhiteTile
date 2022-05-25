@@ -45,13 +45,27 @@ class HighScoresPage extends StatelessWidget {
       }
       return list;
     } else {
-      var message = '';
+      var myScores = '';
       var random = Random();
       for (var i = 0; i < 10; i++) {
         var x = random.nextInt(300) + 100;
-        message += x.toString() + ',';
+        myScores += x.toString() + ',';
       }
-      window.localStorage['scores'] = message;
+      window.localStorage['scores'] = myScores;
+      message = window.localStorage['scores'];
+      message = message.substring(0, message.length - 1);
+      var scoresString = message.split(",");
+      var scores = [];
+      for (var i in scoresString) {
+        scores.add(int.parse(i));
+      }
+      scores.sort((b, a) => a.compareTo(b));
+      List<Widget> list = [];
+      list.add(const Text('HighScores', textAlign: TextAlign.center));
+      for (var i in scores) {
+        list.add(Text(i.toString(), textAlign: TextAlign.center));
+      }
+      return list;
     }
   }
 }

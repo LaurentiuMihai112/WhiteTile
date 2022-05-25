@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:white_tile/game.dart';
 
 import 'high_scores.dart';
@@ -21,7 +24,7 @@ class MenuPage extends StatelessWidget {
             runSpacing: 20,
             direction: Axis.vertical,
             alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center ,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               TextButton(
                 onPressed: () {
@@ -50,7 +53,9 @@ class MenuPage extends StatelessWidget {
                 child: const Text('High scores'),
               ),
               TextButton(
-                onPressed: () {},
+                onPressed: () {
+                  SystemNavigator.pop();
+                },
                 style: ElevatedButton.styleFrom(
                   primary: Colors.lightBlue,
                   onPrimary: Colors.white,
