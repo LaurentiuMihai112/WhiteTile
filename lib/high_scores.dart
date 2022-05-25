@@ -1,4 +1,5 @@
 import 'dart:html';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 
@@ -43,6 +44,14 @@ class HighScoresPage extends StatelessWidget {
         list.add(Text(i.toString(), textAlign: TextAlign.center));
       }
       return list;
+    } else {
+      var message = '';
+      var random = Random();
+      for (var i = 0; i < 10; i++) {
+        var x = random.nextInt(300) + 100;
+        message += x.toString() + ',';
+      }
+      window.localStorage['scores'] = message;
     }
   }
 }
